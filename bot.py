@@ -1,7 +1,7 @@
 """
 🤖 HR Leave Management Telegram Bot - Webhook Version
 ======================================================
-برای PythonAnywhere رایگان
+برای هاست تلگرام VIPHost
 
 Requirements:
     pip install python-telegram-bot==22.7 anthropic python-dotenv flask
@@ -10,13 +10,14 @@ Requirements:
     TELEGRAM_TOKEN=توکن_ربات
     ANTHROPIC_API_KEY=کلید_انتروپیک
     ADMIN_TELEGRAM_ID=آیدی_عددی_ادمین
-    WEBHOOK_URL=https://yourusername.pythonanywhere.com
+    WEBHOOK_URL=https://naser.s16.viptelbot.top
 """
 
 import os
 import sqlite3
 import hashlib
 import json
+import asyncio
 from datetime import datetime, date
 from dotenv import load_dotenv
 import anthropic
@@ -26,8 +27,6 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
     ContextTypes, ConversationHandler, filters
 )
-import asyncio
-import threading
 
 load_dotenv()
 
@@ -35,7 +34,7 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 ADMIN_TG_ID = int(os.getenv("ADMIN_TELEGRAM_ID"))
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://naserasadolahi690118.pythonanywhere.com")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://naser.s16.viptelbot.top")
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 flask_app = Flask(__name__)
@@ -260,7 +259,7 @@ async def menu_router(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return MAIN_MENU
     elif "دستیار" in text:
         ctx.user_data["ai_mode"] = True
-        await update.message.reply_text("🤖 دستیار هوشمند آماده است. سوال بپرسید!\n(برای بازگشت: /menu)")
+        await update.message.reply_text("🤖 دستیار هوشمند آماده است. سوال بپرسید!\n(برای بازگشت: /start)")
         return MAIN_MENU
     elif "ادمین" in text and ctx.user_data.get("is_admin"):
         await show_admin_panel(update, ctx)
@@ -387,13 +386,24 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("\n".join(lines))
     elif data.startswith("approve_"):
         update_leave_status(int(data.split("_")[1]), "approved")
-        await query.edit_message_text(f"✅ مرخصی تایید شد.")
+        await query.edit_message_text("✅ مرخصی تایید شد.")
     elif data.startswith("reject_"):
         update_leave_status(int(data.split("_")[1]), "rejected")
-        await query.edit_message_text(f"❌ مرخصی رد شد.")
+        await query.edit_message_text("❌ مرخصی رد شد.")
 
 # ─── Application Setup ────────────────────────────────────────────────────────
 application = None
+
+def get_or_create_loop():
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("Loop is closed")
+        return loop
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop
 
 def build_application():
     global application
@@ -423,14 +433,7 @@ def build_application():
 def webhook():
     data = flask_request.get_json()
     update = Update.de_json(data, application.bot)
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    loop = get_or_create_loop()
     loop.run_until_complete(application.process_update(update))
     return "OK"
 
@@ -441,19 +444,14 @@ def index():
 @flask_app.route("/set_webhook")
 def set_webhook():
     url = f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}"
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    loop = get_or_create_loop()
     result = loop.run_until_complete(application.bot.set_webhook(url))
-    loop.close()
     return f"Webhook set: {result} → {url}"
 
-# ─── Main ─────────────────────────────────────────────────────────────────────
+# ─── Initialize ───────────────────────────────────────────────────────────────
 build_application()
-
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
+loop = get_or_create_loop()
 loop.run_until_complete(application.initialize())
-# حفظ event loop برای استفاده مجدد
 
 if __name__ == "__main__":
     print("🤖 Bot running with webhook...")
