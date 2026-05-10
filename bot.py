@@ -423,10 +423,15 @@ def build_application():
 def webhook():
     data = flask_request.get_json()
     update = Update.de_json(data, application.bot)
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
     loop.run_until_complete(application.process_update(update))
-    loop.close()
     return "OK"
 
 @flask_app.route("/")
@@ -448,6 +453,7 @@ build_application()
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 loop.run_until_complete(application.initialize())
+# حفظ event loop برای استفاده مجدد
 
 if __name__ == "__main__":
     print("🤖 Bot running with webhook...")
